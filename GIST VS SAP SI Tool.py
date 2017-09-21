@@ -5,23 +5,24 @@ import sys
 import xml.etree.ElementTree as ET
 import pandas as pd
 from collections import defaultdict
+import numpy as np
 
 
 #INPUT FILE PATH DEFINITION
 Input_file_Path = "I0809_SI_WMS_Input_File.csv"
 Gist_XML_Path = []
-Gist_XML_Path.append('BB_9_BB1004796681.xml')
-Gist_XML_Path.append('BD_9_BD1004979297.xml')
-Gist_XML_Path.append('BK_9_BK1004147372.xml')
-Gist_XML_Path.append('BN_9_BN1003833094.xml')
-Gist_XML_Path.append('BQ_9_BQ1002854978.xml')
-Gist_XML_Path.append('BR_9_BR1003971741.xml')
-Gist_XML_Path.append('BT_9_BT1008090503.xml')
-Gist_XML_Path.append('BZ_9_BD1004979296.xml')
-Gist_XML_Path.append('DJ_9_BR1003971742.xml')
-Gist_XML_Path.append('DL_9_DL1003692583.xml')
-Gist_XML_Path.append('DV_9_BR1003971895.xml')
-Gist_XML_Path.append('DW_9_BR1003971743.xml')
+Gist_XML_Path.append('BB_16_BB1004803051.xml')
+Gist_XML_Path.append('BD_16_BD1004987720.xml')
+Gist_XML_Path.append('BK_16_BK1004153887.xml')
+Gist_XML_Path.append('BN_16_BN1003839327.xml')
+Gist_XML_Path.append('BQ_16_BQ1002859533.xml')
+Gist_XML_Path.append('BR_16_BR1003980762.xml')
+Gist_XML_Path.append('BT_16_BT1008096673.xml')
+Gist_XML_Path.append('BZ_16_BD1004987721.xml')
+Gist_XML_Path.append('DJ_16_BR1003980763.xml')
+Gist_XML_Path.append('DL_16_DL1003698978.xml')
+Gist_XML_Path.append('DV_16_BR1003980849.xml')
+Gist_XML_Path.append('DW_16_BR1003980764.xml')
 
 SAP_Input_Path = []
 SAP_Input_Path.append('Q1_9_5908.csv')
@@ -40,6 +41,8 @@ SAP_Input_Path.append('Q1_2_5173.csv')
 ArticleUPCFilePath = 'Bradford_Article_UPC_master.csv'
 
 MergedSAPDepotUPCStockDetails = 'MergedSAPDepotUPCStockDetails.csv'
+
+IdocFailureFilePath = 'Q2.csv'
 
 # LEGACY - SAP DEPOT CODE
 Depot = {}
@@ -105,7 +108,8 @@ def ReadGISTXML(Gist_XML_Path_D1, Depot):
       #Dic_DepotUPCStockDetails[UPC].append(BaseUOM)
 
    df_DepotUPCStockDetails = pd.DataFrame(Dic_DepotUPCStockDetails).transpose()
-   df_DepotUPCStockDetails.columns = ['UPC','Site','StockType','BaseQty', 'BaseUOM']
+   if bool(Dic_DepotUPCStockDetails):
+      df_DepotUPCStockDetails.columns = ['UPC','Site','StockType','BaseQty', 'BaseUOM']
    
    return df_DepotUPCStockDetails
 
@@ -124,20 +128,42 @@ def ReadArticleUPCMaster(ArticleUPCFilePath):
    df_ArticleUPCMaster['Article'] = df_ArticleUPCMaster['Article'].str.lstrip('0')
    return df_ArticleUPCMaster
 
+def ReadIdocFailures(IdocFailureFilePath):
+   df_SAPFailedIdocs = pd.read_csv(IdocFailureFilePath, usecols=["MATNR", "WERKS", "LGORT","BWART","INSMK","SHKZG","MENGE","MEINS","DATASTATUS","PROCESS"],
+      dtype={"MATNR": object, "WERKS": object, "LGORT": object,"BWART": object,"INSMK": object,"SHKZG": object,"MENGE": np.float64,"MEINS": object,"DATASTATUS": object,"PROCESS": object})
+   df_SAPFailedIdocs.columns =['StkMvnttype','Article','Site','StorageLocation','StockType','Debit/Credit','BacklogQty','BaseUOM','ProcessInd','IdocStatus']
+   df_SAPFailedIdocs['Article'] = df_SAPFailedIdocs['Article'].str.lstrip('0')
 
-def MergeGISTSAPStock(df_ALL_DepotUPCStockDetails,df_ALL_SAPDepotUPCStockDetails,df_ArticleUPCMaster):
+  
+   pv_df_SAPFailedIdocs = pd.pivot_table(df_SAPFailedIdocs, index=['Article','Site'], columns=['StkMvnttype','Debit/Credit'], aggfunc=sum, fill_value=0, values='BacklogQty')
+
+
+   return pv_df_SAPFailedIdocs
+
+
+def MergeGISTSAPStock(df_ALL_DepotUPCStockDetails,df_ALL_SAPDepotUPCStockDetails,df_ArticleUPCMaster,pv_df_SAPFailedIdocs):
 
    #df_ALL_MergedSAPDepotUPCStockDetails = pd.merge(df_ALL_DepotUPCStockDetails,df_ALL_SAPDepotUPCStockDetails [['StorageLocation','Department']], on=['UPC', 'Site'] ,how='inner')
    df_ALL_BradfordSAPDepotUPCStockDetails = pd.merge(df_ArticleUPCMaster ,df_ALL_SAPDepotUPCStockDetails, on='Article', how='left')
    df_ALL_BradfordGISTDepotUPCStockDetails = pd.merge(df_ArticleUPCMaster ,df_ALL_DepotUPCStockDetails, on='UPC', how='inner')
-   
-   df_ALL_BradfordDepotUPCStockDetails = pd.merge(df_ALL_BradfordSAPDepotUPCStockDetails ,df_ALL_BradfordGISTDepotUPCStockDetails, on=['Article','Site'], how='outer')
-   print '-------- OUTER -----------'
-   print df_ALL_BradfordDepotUPCStockDetails.head(10)
-   print df_ALL_BradfordDepotUPCStockDetails.shape
+   print 'GIST FILTERED UPCS'
+   print df_ALL_BradfordGISTDepotUPCStockDetails.head(10)
+   df_ALL_BradfordDepotUPCStockDetails = pd.merge(df_ALL_BradfordSAPDepotUPCStockDetails ,df_ALL_BradfordGISTDepotUPCStockDetails,
+                                                  on=['Article','Site'], how='outer',suffixes=(['_SAP', '_GIST']))
 
+   df_ALL_BradfordDepotUPCStockDetails['Stock_Difference'] = df_ALL_BradfordDepotUPCStockDetails['UnrestrictedStockQty'] - df_ALL_BradfordDepotUPCStockDetails['BaseQty']
+
+   #df_ALL_BradfordDepotUPCStockDetails['Debit']  = 'H'
+   #df_ALL_BradfordDepotUPCStockDetails['Credit']  = 'S'
+
+   df_ALL_BradfordDepotUPCStockDetails_failedIdocs = pd.merge(df_ALL_BradfordDepotUPCStockDetails,pv_df_SAPFailedIdocs,right_index=True,
+                                                              left_on=['Article','Site'],how='left')
+   
    #df_ALL_BradfordUPCStockDetails   = pd.merge(df_ALL_BradfordSAPDepotUPCStockDetails ,df_ALL_SAPDepotUPCStockDetails, on=['Article','Site'], how='left')
-   return df_ALL_BradfordGISTDepotUPCStockDetails
+   df_ALL_BradfordDepotUPCStockDetails_failedIdocs.columns.to_series().str.contains('H').multiply(-1)
+   
+   return df_ALL_BradfordDepotUPCStockDetails_failedIdocs
+
      
 
 # READ AND BUILD DEPOT/GIST STOCK
@@ -151,7 +177,7 @@ for depotXML in Gist_XML_Path:
 print df_ALL_DepotUPCStockDetails.head(10)
 print df_ALL_DepotUPCStockDetails.shape
 
-df_ALL_DepotUPCStockDetails.to_csv('GIST_Stock.csv')
+#df_ALL_DepotUPCStockDetails.to_csv('GIST_Stock.csv')
 
 # READ AND BUILD DEPOT/SAP STOCK
 df_ALL_SAPDepotUPCStockDetails = pd.DataFrame()
@@ -163,6 +189,7 @@ for SAPCSVFP in SAP_Input_Path:
    
    df_ALL_SAPDepotUPCStockDetails = df_ALL_SAPDepotUPCStockDetails.append(df_SAP_Each_DepotUPCStockDetails)
 
+print df_ALL_SAPDepotUPCStockDetails.head(10)
 print df_ALL_SAPDepotUPCStockDetails.shape
 
 # READ AND BUILD ARTICLE UPC MASTER
@@ -171,16 +198,19 @@ df_ArticleUPCMaster = ReadArticleUPCMaster(ArticleUPCFilePath)
 print df_ArticleUPCMaster.head(10)
 print df_ArticleUPCMaster.shape
 
-# MERGE GIST AND SAP STOCK TO FIND THE DIFF
-#print df_ALL_SAPDepotUPCStockDetails.dtypes
-#print "-------------------"
-#print df_ArticleUPCMaster.dtypes
+#  READ AND PROCESS THE IDOC FAILURES
 
-df_ALL_MergedSAPDepotUPCStockDetails = MergeGISTSAPStock(df_ALL_DepotUPCStockDetails,df_ALL_SAPDepotUPCStockDetails,df_ArticleUPCMaster)
+df_SAP_IdocFailures = ReadIdocFailures(IdocFailureFilePath)
+print 'failed --------- idocs'
+print df_SAP_IdocFailures.head(10)
+print df_SAP_IdocFailures.shape
+
+# MERGE GIST AND SAP STOCK TO FIND THE DIFF
+df_ALL_MergedSAPDepotUPCStockDetails = MergeGISTSAPStock(df_ALL_DepotUPCStockDetails,df_ALL_SAPDepotUPCStockDetails,df_ArticleUPCMaster,df_SAP_IdocFailures)
 print df_ALL_MergedSAPDepotUPCStockDetails.head(10)
 print df_ALL_MergedSAPDepotUPCStockDetails.shape
 
-df_ALL_MergedSAPDepotUPCStockDetails.to_csv(MergedSAPDepotUPCStockDetails)
+df_ALL_MergedSAPDepotUPCStockDetails.to_csv(MergedSAPDepotUPCStockDetails, index=False)
 
 print "Script Completed Successfully "
 
