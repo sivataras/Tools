@@ -112,6 +112,11 @@ DC_SAP_Secenarios['S74']='KIT BUILD,BUFFER,UNLOCKED,UNLOCKED,+'
 DC_SAP_Secenarios['S75']='PUTAWAY,PUTAWAY,UNLOCKED,UNLOCKED,+'
 DC_SAP_Secenarios['S76']='UNKIT,BUFFER,LOCKED,LOCKED,+'
 DC_SAP_Secenarios['S77']='UNKIT,BUFFER,UNLOCKED,UNLOCKED,+'
+DC_SAP_Secenarios['S78']='ADJUSTMENT,HAM,LOCKED,LOCKED,-'
+DC_SAP_Secenarios['S79']='ADJUSTMENT,HAM,UNLOCKED,UNLOCKED,-'
+DC_SAP_Secenarios['S80']='ADJUSTMENT,RBS,LOCKED,LOCKED,-'
+DC_SAP_Secenarios['S81']='ADJUSTMENT,RBS,UNLOCKED,UNLOCKED,-'
+DC_SAP_Secenarios['S82']='INV LOCK,ECOMKIT,UNLOCKED,LOCKED,+'
 
 #WRITE THE HEADER RECORD FOR OUTPUT FILE
 LS_Output_Record = []
@@ -145,6 +150,12 @@ for eachrecord in LS_WMS_Data:
     elif CODE == 'PUTAWAY':
         REASON_CODE = 'PUTAWAY'
         Bol_Write_Record = True
+    elif CODE == 'KIT BUILD':
+        REASON_CODE = 'BUFFER'
+        Bol_Write_Record = True
+    elif CODE == 'UNKIT':
+        REASON_CODE = 'BUFFER'
+        Bol_Write_Record = True  
     elif CODE == 'INV LOCK' and eachrecord[7]:
         REASON_CODE = eachrecord[7].upper()
         Bol_Write_Record = True
@@ -161,7 +172,7 @@ for eachrecord in LS_WMS_Data:
     #print "REASON CODE " + str(Bol_Write_Record) + str(eachrecord)
     # LOGIC TO DERIVE FROM STATUS
     FROM_STATUS_CODE = ''
-    if CODE == 'ADJUSTMENT' or CODE == 'PUTAWAY':
+    if CODE == 'ADJUSTMENT' or CODE == 'PUTAWAY' or CODE == 'KIT BUILD' or CODE == 'UNKIT':
         FROM_STATUS_CODE = eachrecord[2].upper()
         Bol_Write_Record = True
     elif CODE == 'INV UNLOCK':
@@ -178,7 +189,7 @@ for eachrecord in LS_WMS_Data:
     TO_STATUS_CODE = ''
     if Bol_Write_Record:
         
-        if CODE == 'ADJUSTMENT' or CODE == 'PUTAWAY':
+        if CODE == 'ADJUSTMENT' or CODE == 'PUTAWAY' or CODE == 'KIT BUILD' or CODE == 'UNKIT':
             TO_STATUS_CODE = eachrecord[2].upper()
             Bol_Write_Record = True
         elif CODE == 'INV UNLOCK':
